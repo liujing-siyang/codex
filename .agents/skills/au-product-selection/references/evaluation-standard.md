@@ -20,6 +20,19 @@ Decision constraint:
 - High search volume with `falling` or `flat` trend cannot be `优先进入`.
 - Low search volume with sustained growth may be `可小批量测试` or better if competition and profit are favorable.
 
+
+## Seasonality Rules
+
+Classify each verified keyword opportunity:
+- `evergreen`: monthly demand is relatively stable and no clear peak dominates.
+- `seasonal`: demand is concentrated in a few recurring months with a clear peak/trough gap.
+- `event_driven`: title or keyword contains holiday, anniversary, year, IP, or event terms.
+- `insufficient`: fewer than 6 usable monthly trend points.
+
+For US-to-AU migration, weather and season-driven demand should be shifted by roughly 6 months because Australia is in the Southern Hemisphere. Seasonal opportunities must show source-market peak months and an AU test/stock window. Do not judge seasonal products only by recent 3-month growth; compare YoY and peak-month position when possible.
+
+Event-driven demand should not be automatically shifted. Mark it for manual AU cultural, holiday, and timing validation.
+
 ## Market Size Bands
 
 Use source-site category or keyword market volume when available:

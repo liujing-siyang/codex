@@ -3,6 +3,7 @@
 """Score AU migration opportunities with keyword growth as a hard gate."""
 import argparse
 import json
+import re
 from pathlib import Path
 
 ZH = {
@@ -19,6 +20,15 @@ FORBIDDEN_TERMS = [
     "liquid", "\u6db2\u4f53", "supplement", "\u4fdd\u5065", "medical", "\u533b\u7597",
     "medicine", "\u836f", "food", "\u98df\u54c1", "\u6613\u71c3", "weapon", "\u5200", "cbd",
 ]
+EVENT_TERMS = [
+    "christmas", "halloween", "easter", "valentine", "thanksgiving", "4th of july",
+    "independence day", "anniversary", "patriotic", "super bowl", "new year",
+    "limited edition", "movie", "k-pop", "demon hunters",
+]
+MONTH_NAMES = {
+    1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+    7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
+}
 
 
 def val(obj, *keys, default=0):
@@ -63,6 +73,80 @@ def trend_metrics(candidate):
     else:
         status = "flat"
     return {"growth_3m": g3, "growth_6m": g6, "growth_12m": g12, "trend_status": status, "history_points": len(history)}
+
+
+def parse_month(month):
+    match = re.match(r"^20\d{2}-(0?[1-9]|1[0-2])$", str(month or ""))
+    return int(match.group(1)) if match else None
+
+
+def shift_month(month, offset=6):
+    return ((month - 1 + offset) % 12) + 1
+
+
+def month_label(months):
+    if not months:
+        return "N/A"
+    return ", ".join(MONTH_NAMES[m] for m in months if m in MONTH_NAMES)
+
+
+def seasonality_metrics(candidate):
+    history = candidate.get("keyword_history") or []
+    points = []
+    for item in history:
+        month = parse_month(item.get("month"))
+        volume = item.get("search_volume")
+        if month is None or volume is None:
+            continue
+        try:
+            points.append((month, float(volume)))
+        except (TypeError, ValueError):
+            continue
+    text = " ".join([
+        str(candidate.get("candidate", "")),
+        str(candidate.get("primary_keyword", "")),
+        " ".join(str(x) for x in candidate.get("long_tail_keywords", [])[:10]),
+    ]).lower()
+    if any(term in text for term in EVENT_TERMS):
+        return {
+            "label": "event_driven",
+            "source_peak_months": [],
+            "au_entry_window": "Event timing; validate AU cultural fit manually",
+            "notes": "Title or keyword contains event/year/IP terms. Do not apply simple US-to-AU 6-month season shift automatically.",
+        }
+    if len(points) < 6:
+        return {
+            "label": "insufficient",
+            "source_peak_months": [],
+            "au_entry_window": "Trend history insufficient",
+            "notes": "Fewer than 6 monthly trend points; cannot classify evergreen vs seasonal reliably.",
+        }
+    month_totals = {}
+    for month, volume in points:
+        month_totals.setdefault(month, []).append(volume)
+    monthly_avg = {m: sum(v) / len(v) for m, v in month_totals.items()}
+    avg_volume = sum(v for _, v in points) / len(points)
+    peak_volume = max(monthly_avg.values()) if monthly_avg else 0
+    trough_volume = min(monthly_avg.values()) if monthly_avg else 0
+    if not avg_volume or not peak_volume:
+        label = "insufficient"
+    else:
+        peak_threshold = max(avg_volume * 1.35, peak_volume * 0.70)
+        peak_months = sorted([m for m, v in monthly_avg.items() if v >= peak_threshold])
+        peak_ratio = peak_volume / max(trough_volume, 1)
+        label = "seasonal" if peak_ratio >= 2.2 and len(peak_months) <= 5 else "evergreen"
+    peak_months = sorted([m for m, v in monthly_avg.items() if v >= max(avg_volume * 1.35, peak_volume * 0.70)]) if label == "seasonal" else []
+    if label == "seasonal":
+        au_months = sorted({shift_month(m) for m in peak_months})
+        window = f"US peak {month_label(peak_months)} -> AU rough peak {month_label(au_months)}; test/stock 1-2 months before AU peak"
+        notes = "Seasonality detected from US keyword history. Because AU is in the Southern Hemisphere, shift weather/season demand by roughly 6 months."
+    elif label == "evergreen":
+        window = "Year-round demand; schedule tests by competition, cashflow, and inventory lead time"
+        notes = "No strong monthly spike detected from keyword history."
+    else:
+        window = "Trend history insufficient"
+        notes = "Cannot classify seasonality reliably."
+    return {"label": label, "source_peak_months": peak_months, "au_entry_window": window, "notes": notes}
 
 
 def market_score(candidate, trend):
@@ -187,6 +271,7 @@ def verdict(total, trend_status, flags):
 
 def score_candidate(candidate):
     trend = trend_metrics(candidate)
+    seasonality = seasonality_metrics(candidate)
     scores = {
         "market_demand": market_score(candidate, trend),
         "competition_strength": competition_score(candidate),
@@ -197,7 +282,7 @@ def score_candidate(candidate):
     scores["beginner_fit_risk"] = risk
     total = round(sum(scores.values()), 2)
     opp_type = opportunity_type(candidate, scores["competition_strength"], candidate.get("profit", {}))
-    return {"candidate": candidate, "trend": trend, "scores": scores, "total_score": total, "verdict": verdict(total, trend["trend_status"], flags), "opportunity_type": opp_type, "hard_exclusion_flags": flags}
+    return {"candidate": candidate, "trend": trend, "seasonality": seasonality, "scores": scores, "total_score": total, "verdict": verdict(total, trend["trend_status"], flags), "opportunity_type": opp_type, "hard_exclusion_flags": flags}
 
 
 def main():
