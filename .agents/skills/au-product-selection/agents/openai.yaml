@@ -1,0 +1,7 @@
+interface:
+  display_name: "AU Product Selection"
+  short_description: "AU migration product selection with trend validation"
+  default_prompt: "Use $au-product-selection to evaluate Amazon product opportunities for AU migration with verified keyword trend growth."
+
+policy:
+  allow_implicit_invocation: true
