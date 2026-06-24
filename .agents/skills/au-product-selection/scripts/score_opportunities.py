@@ -25,6 +25,8 @@ EVENT_TERMS = [
     "independence day", "anniversary", "patriotic", "super bowl", "new year",
     "limited edition", "movie", "k-pop", "demon hunters",
 ]
+DISCOVERY_EXCLUDED_MAIN_CATEGORIES = {"clothing, shoes & jewelry"}
+STRONG_SEASON_TERMS = ["summer", "swim", "beach", "wedding", "patriotic", "anniversary", "2026"]
 MONTH_NAMES = {
     1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
     7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
@@ -240,6 +242,104 @@ def risk_score(candidate):
     return round(max(0, min(10, score)), 2), sorted(set(flags))
 
 
+def is_apparel_candidate(candidate):
+    main = str(val(candidate, "category", "main", default="") or "").strip().lower()
+    return main in DISCOVERY_EXCLUDED_MAIN_CATEGORIES
+
+
+def text_blob(candidate):
+    return " ".join([
+        str(candidate.get("candidate", "")),
+        str(candidate.get("primary_keyword", "")),
+        " ".join(str(x) for x in candidate.get("long_tail_keywords", [])[:12]),
+        str(val(candidate, "category", "main", default="")),
+        str(val(candidate, "category", "sub", default="")),
+    ]).lower()
+
+
+def discovery_score(candidate, hard_flags):
+    if hard_flags:
+        return 0, ["hard_exclusion"], ["Hard exclusion flags present"]
+    if is_apparel_candidate(candidate):
+        return 0, ["excluded_apparel"], ["Clothing, Shoes & Jewelry is excluded from discovery review by default"]
+
+    market = candidate.get("market", {})
+    profit = candidate.get("profit", {})
+    comp = candidate.get("competition", {})
+    sales = market.get("monthly_sales") or 0
+    revenue = market.get("monthly_revenue") or 0
+    sales_growth = market.get("monthly_sales_growth") or 0
+    margin = pct(profit.get("gross_margin")) or 0
+    price = profit.get("price") or 0
+    fba_fee = profit.get("fba_fee") or 0
+    review_count = comp.get("review_count")
+    seller_count = comp.get("seller_count")
+    variant_count = comp.get("variant_count")
+    rating = comp.get("rating") or 0
+    text = text_blob(candidate)
+
+    parts = []
+    score = 0
+    sales_score = min(25, float(sales) / 10000 * 25) if sales else 0
+    revenue_score = min(10, float(revenue) / 250000 * 10) if revenue else 0
+    growth_score = min(12, max(0, float(sales_growth)) / 0.5 * 12) if sales_growth else 0
+    margin_score = min(18, margin / 0.7 * 18) if margin else 0
+    price_score = 8 if 15 <= float(price or 0) <= 45 else (4 if price else 0)
+    review_score = 8 if review_count is not None and float(review_count) <= 500 else (4 if review_count is not None and float(review_count) <= 1000 else 0)
+    seller_score = 6 if seller_count is not None and float(seller_count) <= 3 else 0
+    variant_score = 5 if variant_count is not None and float(variant_count) <= 10 else (2 if variant_count is not None and float(variant_count) <= 30 else 0)
+    fba_score = 4 if fba_fee and float(fba_fee) <= 4 else (2 if fba_fee and float(fba_fee) <= 6 else 0)
+    rating_score = 4 if rating and float(rating) >= 4.0 else 0
+
+    score = sales_score + revenue_score + growth_score + margin_score + price_score + review_score + seller_score + variant_score + fba_score + rating_score
+    flags = []
+    if any(term in text for term in EVENT_TERMS):
+        score -= 10
+        flags.append("event_driven_noise")
+    elif any(term in text for term in STRONG_SEASON_TERMS):
+        score -= 6
+        flags.append("seasonal_noise")
+    if variant_count is not None and float(variant_count) > 50:
+        score -= 6
+        flags.append("high_variant_complexity")
+    if rating and float(rating) < 4.0:
+        score -= 4
+        flags.append("low_rating")
+
+    if sales_score >= 18:
+        parts.append("high monthly sales")
+    if revenue_score >= 7:
+        parts.append("meaningful revenue")
+    if margin_score >= 14:
+        parts.append("high gross margin")
+    if review_score >= 8:
+        parts.append("review count still approachable")
+    if seller_score >= 6:
+        parts.append("low seller count")
+    if variant_score >= 5:
+        parts.append("low variant complexity")
+    if fba_score >= 4:
+        parts.append("low FBA fee")
+    if not parts:
+        parts.append("commercial signals need manual validation")
+
+    return round(max(0, min(100, score)), 2), flags, parts
+
+
+def review_tier(total, trend_status, hard_flags, discovery, discovery_flags):
+    if hard_flags:
+        return "excluded"
+    if trend_status == "rising" or total >= 70:
+        return "priority_trend_verified"
+    if "excluded_apparel" in discovery_flags:
+        return "excluded"
+    if discovery >= 80:
+        return "priority_discovery"
+    if discovery >= 75:
+        return "extended_discovery"
+    return "excluded"
+
+
 def opportunity_type(candidate, comp_score, profit):
     margin = pct(profit.get("gross_margin"))
     sales = val(candidate, "market", "monthly_sales", default=0) or 0
@@ -281,8 +381,23 @@ def score_candidate(candidate):
     risk, flags = risk_score(candidate)
     scores["beginner_fit_risk"] = risk
     total = round(sum(scores.values()), 2)
+    discovery, discovery_flags, discovery_notes = discovery_score(candidate, flags)
+    tier = review_tier(total, trend["trend_status"], flags, discovery, discovery_flags)
     opp_type = opportunity_type(candidate, scores["competition_strength"], candidate.get("profit", {}))
-    return {"candidate": candidate, "trend": trend, "seasonality": seasonality, "scores": scores, "total_score": total, "verdict": verdict(total, trend["trend_status"], flags), "opportunity_type": opp_type, "hard_exclusion_flags": flags}
+    return {
+        "candidate": candidate,
+        "trend": trend,
+        "seasonality": seasonality,
+        "scores": scores,
+        "total_score": total,
+        "discovery_score": discovery,
+        "discovery_flags": discovery_flags,
+        "discovery_notes": discovery_notes,
+        "review_tier": tier,
+        "verdict": verdict(total, trend["trend_status"], flags),
+        "opportunity_type": opp_type,
+        "hard_exclusion_flags": flags,
+    }
 
 
 def main():
@@ -293,7 +408,7 @@ def main():
     data_path = Path(args.data_json)
     data = json.loads(data_path.read_text(encoding="utf-8"))
     scored = [score_candidate(c) for c in data.get("candidates", [])]
-    scored.sort(key=lambda x: (x["trend"]["trend_status"] == "rising", x["total_score"]), reverse=True)
+    scored.sort(key=lambda x: (x["trend"]["trend_status"] == "rising", x.get("discovery_score", 0), x["total_score"]), reverse=True)
     scorecard = {"metadata": data.get("metadata", {}), "opportunities": scored}
     out = Path(args.output) if args.output else data_path.with_name("scorecard.json")
     out.write_text(json.dumps(scorecard, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -33,6 +33,14 @@ Default source marketplace: `US`. Default target marketplace: `AU`. Prefer Selle
    ```bash
    python .agents/skills/au-product-selection/scripts/render_html_report.py reports/au-product-selection/<run>/scorecard.json
    ```
+   When a curated trend-verified scorecard is used for priority decisions, render the extended review list from the full discovery scorecard:
+   ```bash
+   python .agents/skills/au-product-selection/scripts/render_html_report.py reports/au-product-selection/<run>/formal_scorecard.json --extended-scorecard reports/au-product-selection/<run>/scorecard.json -o reports/au-product-selection/<run>/index.html
+   ```
+5. Check manual-review ASIN dedupe:
+   ```bash
+   python .agents/skills/au-product-selection/scripts/check_review_asin_dedupe.py reports/au-product-selection/<run>/scorecard.json --html reports/au-product-selection/<run>/index.html
+   ```
 
 Default output directory:
 
@@ -60,7 +68,9 @@ Important normalized fields include `candidate`, `primary_keyword`, `long_tail_k
 
 Treat SellerSprite `\u5546\u54c1\u6807\u9898` as a product-keyword and attribute-keyword bundle. Extract the product noun phrase, modifiers, specs, use cases, and risk terms into `title_seed_keywords`.
 
-Merge `AC\u5173\u952e\u8bcd` with title-derived seeds into `long_tail_keywords`. These are discovery seeds only. They do not count as verified trend evidence until matched with SellerSprite keyword-history exports, Sorftime, Google Trends, Exploding Topics, TikTok, or another trend source.
+Use the SellerSprite `\u54c1\u724c` field to remove brand terms from title-derived keyword seeds. Title-derived keyword seeds must contain at least two meaningful English tokens; single words such as `SPF`, `Waterproof`, or `Pillow` are attributes, not keywords.
+
+Merge cleaned `AC\u5173\u952e\u8bcd` with title-derived seeds into `long_tail_keywords`. Remove exact brand prefixes and single-word terms before using them as keyword candidates. These are discovery seeds only. They do not count as verified trend evidence until matched with SellerSprite keyword-history exports, Sorftime, Google Trends, Exploding Topics, TikTok, or another trend source.
 
 ### 4. Verify Keyword Trend First
 
@@ -71,6 +81,16 @@ Trend verdicts: `rising`, `flat`, `falling`, or `insufficient`. Do not assign \u
 ### 5. Score And Classify
 
 Read `references/evaluation-standard.md` before scoring. Use the fixed weights: market demand 30, competition strength 30, profit space 20, AU migration fit 10, beginner fit and risk 10.
+
+For SellerSprite product-discovery pools without keyword history, also calculate `discovery_score` as a commercial-signal prefilter. Discovery score uses monthly sales, monthly revenue, monthly sales growth, gross margin, price band, FBA fee, review count, seller count, variant count, and rating. It is used to decide manual-review priority and whether a candidate deserves trend validation; it does not prove keyword trend and must not by itself produce the \u4f18\u5148\u8fdb\u5165 verdict.
+
+Discovery review tiers:
+- `priority_trend_verified`: `trend_status = rising` or total score >= 70, with no hard-elimination flags.
+- `priority_discovery`: `discovery_score >= 80`, no hard-elimination flags, and not in the default excluded discovery categories.
+- `extended_discovery`: `discovery_score >= 75`, no hard-elimination flags, not already in priority, and not in the default excluded discovery categories.
+- `excluded`: hard risk, apparel discovery exclusion, or weak discovery signal.
+
+Default discovery exclusions: `Clothing, Shoes & Jewelry` is excluded from discovery review because of size/color variants, return risk, seasonality, and beginner-seller complexity. Hard-exclusion products are always excluded.
 
 Classify opportunity types as \u9ad8\u5229\u6da6 + \u5927\u5e02\u573a + \u5c0f\u7ade\u4e89, \u9ad8\u5229\u6da6 + \u5c0f\u5e02\u573a + \u5c0f\u7ade\u4e89, \u4f4e\u5229\u6da6 + \u5927\u5e02\u573a + \u5c0f\u7ade\u4e89, or non-priority.
 
@@ -84,9 +104,13 @@ For US-to-AU migration, always treat weather/season demand as opposite-season by
 
 ### 7. Render Decision Dashboard
 
-Generate `index.html` with a priority manual-review table and an extended manual-review table. The priority table should show at most the first 10 reviewable opportunities, using ASIN and representative keyword instead of long product titles. The extended table should include every other reviewable opportunity with ASIN, keyword, search volume, keyword growth, seasonality label, AU entry window, and recommended action.
+Generate `index.html` with a priority manual-review table and an extended manual-review table. The priority table should show every high-priority reviewable ASIN, using ASIN and representative keyword instead of long product titles; do not cap it at 10. The extended table should show other worthwhile ASINs outside the priority list, with ASIN, keyword, search volume, keyword growth, seasonality label, AU entry window, and recommended action.
 
-Reviewable means total score >= 70 or `trend_status = rising`, excluding hard-elimination candidates. Detail sections should use `ASIN / representative keyword` as the heading. Product titles may appear only as secondary source context.
+Priority manual review means `priority_trend_verified` or `priority_discovery`. Extended manual review means `extended_discovery`. Both lists are uncapped by count but constrained by score thresholds and must be mutually exclusive. If the priority report uses a curated trend-verified scorecard, the full SellerSprite discovery scorecard should still be supplied with `--extended-scorecard` so discovery-priority candidates are not dropped.
+
+Before splitting priority and extended tables, deduplicate items by `candidate.identifiers.asin`; if one ASIN has multiple keyword opportunities, show only the strongest representative keyword based on rising trend, total score, and search volume. Missing ASIN values must use a stable fallback key based on the representative keyword so unrelated `N/A` candidates are not merged.
+
+Detail sections should use `ASIN / representative keyword` as the heading. Product titles may appear only as secondary source context.
 
 Every important table must include a \u5173\u952e\u6d1e\u5bdf paragraph with data source and collection time.
 

@@ -20,6 +20,10 @@ Each candidate in `data.json` should use this shape:
   "profit": {"price": 0, "cost": 0, "fba_fee": 0, "gross_margin": 0, "return_rate": 0},
   "migration": {"au_fit_notes": "", "au_competitor_count": null, "seasonality_risk": "", "compliance_risk": ""},
   "seasonality": {"label": "evergreen|seasonal|event_driven|insufficient", "source_peak_months": [6, 7], "au_entry_window": "US peak Jun, Jul -> AU rough peak Dec, Jan; test/stock 1-2 months before AU peak", "notes": "Seasonality interpretation and AU timing caveat"},
+  "discovery_score": 0,
+  "discovery_flags": ["excluded_apparel"],
+  "discovery_notes": ["high monthly sales", "high gross margin"],
+  "review_tier": "priority_trend_verified|priority_discovery|extended_discovery|excluded",
   "risk": {"forbidden_flags": [], "patent_risk": "", "assembly_complexity": "", "variant_complexity": "", "package_size_segment": ""},
   "keyword_history": [{"keyword": "main keyword", "month": "2026-01", "search_volume": 1000, "source": "SellerSprite keyword export.csv"}],
   "source_refs": [{"source": "SellerSprite", "file": "Product-US-Last-30-days-580346.xlsx", "collected_at": "2026-06-23", "fields": ["\u5546\u54c1\u6807\u9898"]}]
@@ -39,7 +43,7 @@ Product discovery fields:
 - Profit/logistics: `\u4ef7\u683c($)`, `FBA($)`, `\u6bdb\u5229\u7387`, `\u5305\u88c5\u5c3a\u5bf8\u5206\u6bb5`.
 - Keyword seeds: `\u5546\u54c1\u6807\u9898`, `AC\u5173\u952e\u8bcd`.
 
-`\u5546\u54c1\u6807\u9898` is treated as a keyword bundle for discovery only. It does not prove trend growth.
+`\u5546\u54c1\u6807\u9898` is treated as a keyword bundle for discovery only. Use the SellerSprite `\u54c1\u724c` field to remove brand terms before creating `title_seed_keywords`. Title-derived keyword candidates must contain at least two meaningful English tokens; single words are attributes, not keyword seeds. Title-derived seeds do not prove trend growth.
 
 ## Common Field Aliases
 

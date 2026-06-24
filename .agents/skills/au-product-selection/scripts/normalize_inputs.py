@@ -60,6 +60,10 @@ RISK_KEYWORDS = {
     "vitamin": "supplement risk", "supplement": "supplement risk", "capsule": "supplement risk", "gummy": "supplement/food risk",
     "drops": "liquid risk", "food": "food/import risk", "baby": "child-safety risk", "kids": "child-safety risk",
 }
+PRODUCT_NOUNS = {
+    "speaker", "machine", "stick", "shelf", "rack", "case", "holder", "organizer", "cleanser", "soap", "heads", "brush",
+    "display", "fan", "trap", "charger", "splitter", "repeller", "system", "refill", "grinder",
+}
 
 
 def read_csv(path):
@@ -159,33 +163,74 @@ def unique_keep_order(items):
     return out
 
 
-def title_tokens(title):
-    words = [w for w in WORD_RE.findall(str(title or "")) if w.lower() not in STOPWORDS]
-    return words
+def keyword_tokens(text):
+    return [w for w in WORD_RE.findall(str(text or "")) if w.lower() not in STOPWORDS]
 
 
-def extract_title_seed_keywords(title):
-    words = title_tokens(title)
+def strip_brand_from_keyword(keyword, brand=None):
+    words = keyword_tokens(keyword)
+    brand_words = [w.lower() for w in keyword_tokens(brand)]
+    if brand_words and [w.lower() for w in words[:len(brand_words)]] == brand_words:
+        words = words[len(brand_words):]
+    return " ".join(words)
+
+
+def is_valid_keyword_seed(keyword):
+    return len(keyword_tokens(keyword)) >= 2
+
+
+def clean_keyword_seed(keyword, brand=None):
+    cleaned = strip_brand_from_keyword(keyword, brand)
+    return cleaned if is_valid_keyword_seed(cleaned) else ""
+
+
+def clean_keyword_list(keywords, brand=None):
+    cleaned = [clean_keyword_seed(keyword, brand) for keyword in keywords]
+    return unique_keep_order([keyword for keyword in cleaned if keyword])
+
+
+def title_tokens_legacy(title):
+    """Backward-compatible alias for older ad hoc imports."""
+    return title_tokens(title)
+
+
+def title_tokens(title, brand=None):
+    words = keyword_tokens(title)
+    brand_words = [w.lower() for w in keyword_tokens(brand)]
+    if not brand_words:
+        return words
+    cleaned = []
+    i = 0
+    while i < len(words):
+        window = [w.lower() for w in words[i:i + len(brand_words)]]
+        if window == brand_words:
+            i += len(brand_words)
+            continue
+        cleaned.append(words[i])
+        i += 1
+    return cleaned
+
+
+def extract_title_seed_keywords(title, brand=None):
+    words = title_tokens(title, brand)
     seeds = []
-    # First meaningful 2-4 word phrases usually contain the product noun phrase.
-    for n in (4, 3, 2):
+    if len(words) >= 4 and words[3].lower() in PRODUCT_NOUNS:
+        seeds.append(" ".join(words[:4]))
+    # First meaningful 2-3 word phrases usually contain the product noun phrase without crossing too far into attributes.
+    for n in (3, 2):
         if len(words) >= n:
             seeds.append(" ".join(words[:n]))
     lower_words = [w.lower() for w in words]
     for i, word in enumerate(lower_words):
-        if word in {"stick", "shelf", "rack", "case", "holder", "organizer", "cleanser", "soap", "heads", "brush", "display"}:
+        if word in PRODUCT_NOUNS:
             start = max(0, i - 2)
             seeds.append(" ".join(words[start:i + 1]))
-        if word in {"spf", "uv", "waterproof", "portable", "sandproof", "replacement", "electric", "wireless"}:
-            seeds.append(words[i])
-            if i + 1 < len(words):
-                seeds.append(" ".join(words[i:i + 2]))
     # Pair important modifiers with product nouns, e.g. sunscreen stick / sun stick / display shelf.
-    for left in ("sun", "sunscreen", "bottle", "liquor", "shot", "toothbrush", "replacement"):
-        for right in ("stick", "shelf", "rack", "case", "heads", "brush", "holder", "display"):
-            if left in lower_words and right in lower_words:
+    for left in ("sun", "sunscreen", "bottle", "liquor", "shot", "toothbrush", "replacement", "pillow", "white", "bluetooth"):
+        for right in ("speaker", "machine", "stick", "shelf", "rack", "case", "heads", "brush", "holder", "display"):
+            if any(lower_words[i:i + 2] == [left, right] for i in range(len(lower_words) - 1)):
                 seeds.append(f"{left} {right}")
-    return unique_keep_order(seeds)[:12]
+    return clean_keyword_list(seeds, brand)[:12]
 
 
 def risk_flags_from_text(*parts):
@@ -218,9 +263,11 @@ def extract_history(row, primary_keyword, source):
 
 def normalize_row(row, source_file, row_number, source_site, target_site):
     title = pick(row, "candidate")
-    ac_keywords = split_keywords(pick(row, "long_tail_keywords"))
-    title_seeds = extract_title_seed_keywords(title)
-    primary = pick(row, "primary_keyword") or (title_seeds[0] if title_seeds else title) or "Unknown keyword"
+    brand = pick(row, "brand")
+    ac_keywords = clean_keyword_list(split_keywords(pick(row, "long_tail_keywords")), brand)
+    title_seeds = extract_title_seed_keywords(title, brand)
+    picked_primary = clean_keyword_seed(pick(row, "primary_keyword"), brand)
+    primary = picked_primary or (title_seeds[0] if title_seeds else None) or (ac_keywords[0] if ac_keywords else None) or title or "Unknown keyword"
     candidate = title or primary
     long_tail = unique_keep_order(ac_keywords + title_seeds)
     risk_flags = unique_keep_order(split_keywords(pick(row, "forbidden_flags")) + risk_flags_from_text(title, pick(row, "category_path"), pick(row, "detail_params"), pick(row, "sub_category")))
@@ -234,7 +281,7 @@ def normalize_row(row, source_file, row_number, source_site, target_site):
         "verified_trend_keywords": sorted({p.get("keyword") for p in history if p.get("keyword")}),
         "source_site": source_site,
         "target_site": target_site,
-        "identifiers": {"asin": pick(row, "asin"), "brand": pick(row, "brand"), "product_url": pick(row, "product_url"), "image_url": pick(row, "image_url")},
+        "identifiers": {"asin": pick(row, "asin"), "brand": brand, "product_url": pick(row, "product_url"), "image_url": pick(row, "image_url")},
         "category": {"path": pick(row, "category_path"), "main": pick(row, "main_category"), "sub": pick(row, "sub_category")},
         "market": {"monthly_sales": as_number(pick(row, "monthly_sales")), "monthly_sales_growth": as_number(pick(row, "monthly_sales_growth")), "monthly_revenue": as_number(pick(row, "monthly_revenue")), "search_volume": as_number(pick(row, "search_volume")), "new_product_count": as_number(pick(row, "new_product_count")), "new_product_sales_share": as_number(pick(row, "new_product_sales_share"))},
         "competition": {"top3_product_concentration": as_number(pick(row, "top3_product_concentration")), "top3_brand_concentration": as_number(pick(row, "top3_brand_concentration")), "top3_seller_concentration": as_number(pick(row, "top3_seller_concentration")), "click_concentration": as_number(pick(row, "click_concentration")), "conversion_concentration": as_number(pick(row, "conversion_concentration")), "spr": as_number(pick(row, "spr")), "cpc": as_number(pick(row, "cpc")), "review_count": as_number(pick(row, "review_count")), "rating": as_number(pick(row, "rating")), "seller_count": as_number(pick(row, "seller_count")), "variant_count": as_number(pick(row, "variant_count")), "amazon_owned_share": as_number(pick(row, "amazon_owned_share"))},
