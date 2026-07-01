@@ -2,6 +2,9 @@
 name: "review-analysis"
 description: "对亚马逊商品评论进行深度分析，自动识别产品痛点、分析退货原因，生成改进建议和客服回复模板。Invoke when user uses /review-analysis command with a product ASIN."
 ---
+## Sorftime MCP Live Schema Rule
+
+When calling Sorftime, use the live `mcp__sorftime_server` tool schema as the source of truth. Read `.agents/references/sorftime-server-tool-schema.md` before using Sorftime tools. For review analysis, prefer direct MCP calls to `product_detail` and `product_reviews`. Legacy curl examples and `.mcp.json` API-key instructions are compatibility notes only; do not bypass the connected MCP tool unless the user explicitly asks to debug the underlying HTTP MCP service.
 
 # 亚马逊商品评论深度分析
 

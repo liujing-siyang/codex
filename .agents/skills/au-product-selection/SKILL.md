@@ -13,7 +13,7 @@ Never invent data. Every market size, growth, competition, profit, trend, VOC, o
 
 Keyword trend validation is mandatory. Search-volume growth rate is more important than absolute search volume. A product with large search volume but falling or flat keyword trend must not receive the \u4f18\u5148\u8fdb\u5165 verdict.
 
-Default source marketplace: `US`. Default target marketplace: `AU`. Prefer SellerSprite exports under `references/sellersprite/` as the primary product-discovery input when provided. Use Sorftime MCP, TikTok, Google Trends, Exploding Topics, Reddit/social media, and web scraping as validation layers. When Sorftime is available, prefer the live `mcp__sorftime_server` tools and read `references/sorftime-mcp.md`; treat older repo docs or official pages as conceptual references when tool names differ.
+Default source marketplace: `US`. Default target marketplace: `AU`. Prefer SellerSprite exports under `references/sellersprite/` as the primary product-discovery input when provided. Use Sorftime MCP, TikTok, Google Trends, Exploding Topics, Reddit/social media, and web scraping as validation layers. When Sorftime is available, prefer the live `mcp__sorftime_server` tools and read `references/sorftime-mcp.md` plus `.agents/references/sorftime-server-tool-schema.md`; treat older repo docs or official pages as conceptual references only when tool names differ.
 
 ## Quick Start
 

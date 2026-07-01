@@ -1,5 +1,7 @@
 # Sorftime MCP Supplementary Data Sources
 
+Important: the live mcp__sorftime_server tool schema is the source of truth. For the project-level live tool map and legacy-name warnings, read ../../../references/sorftime-server-tool-schema.md before making Sorftime calls. Do not rely on older repository examples or official endpoint counts when a tool is not exposed in the active schema.
+
 Official entry: `https://open.sorftime.com/mcp?atag=MjAxODA5MTMyMzIwMzU1NzAwMDE~`.
 
 Use the configured `sorftime-server` MCP as a supplement to SellerSprite product-discovery exports. Prefer live tool discovery over older repository examples because callable names can differ from historical docs. Never use Sorftime data to bypass the core rule: verified keyword growth is required before a candidate can receive `????`.

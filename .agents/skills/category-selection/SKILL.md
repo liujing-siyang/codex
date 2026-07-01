@@ -2,6 +2,9 @@
 name: "category-selection"
 description: "亚马逊品类自动化选品分析技能。通过五维评分模型对亚马逊品类进行深度市场调研，生成Markdown分析报告。当用户使用 /category-selection 命令或提出'分析XX品类'、'XX品类市场调研'、'XX品类选品'等需求时触发此技能。支持配置分析数量，默认Top20。"
 ---
+## Sorftime MCP Live Schema Rule
+
+When calling Sorftime, use the live `mcp__sorftime_server` tool schema as the source of truth. Read `.agents/references/sorftime-server-tool-schema.md` before using Sorftime tools. Historical names such as `category_report`, `category_name_search`, and `category_trend` are compatibility notes only unless exposed by the live schema. If category/market endpoints are not exposed, use `category_tree`, `category_keywords`, `similar_product_feature`, `keyword_detail`, `keyword_trend`, `keyword_search_results`, `potential_product`, SellerSprite exports, or user-provided node IDs, and label the evidence limitation.
 
 ## 快速参考
 
@@ -474,9 +477,7 @@ curl -s -X POST "https://mcp.sorftime.com?key={YOUR_KEY}" \
 ## 参考文档
 
 - [评分标准详解](references/scoring-standard.md)
-- [API 快速参考](references/api-quick-reference.md)
-- [Sorftime MCP API 文档](references/sorftime-mcp-api.md)
-- [类目 API 参考](references/category-api-reference.md)
+- [Sorftime live tool schema](../../references/sorftime-server-tool-schema.md) - 当前可调用 MCP 工具的唯一维护入口
 
 ---
 

@@ -2,6 +2,9 @@
 name: "amazon-analyse"
 description: "对亚马逊竞品Listing进行全维度穿透分析，包括文案逻辑、评论分析、关键词分析、市场动态等。分析完成后自动保存为Markdown报告文档到reports/目录。Invoke when user uses /amazon-analyse command with a product ASIN."
 ---
+## Sorftime MCP Live Schema Rule
+
+When calling Sorftime, use the live `mcp__sorftime_server` tool schema as the source of truth. Read `.agents/references/sorftime-server-tool-schema.md` before using Sorftime tools. Legacy curl examples, `.mcp.json` API-key instructions, and historical tool names in this skill are compatibility notes only; do not call a tool unless it is exposed in the current schema.
 
 # 亚马逊竞品Listing全维度穿透分析
 
@@ -309,9 +312,9 @@ Write $FILENAME
 
 ## 参考文档
 
-- [API 工具参考](references/api-tools-reference.md) - 完整的 curl 调用格式和故障排查
+- [Sorftime live tool schema](../../references/sorftime-server-tool-schema.md) - 当前可调用 MCP 工具的唯一维护入口
 - [报告管理](references/report-management.md) - 报告生命周期管理和归档策略
-- [Sorftime MCP API](references/sorftime-mcp-api.md) - 完整 API 接口文档
+- 不再维护旧 Sorftime/API reference 文件；实际调用必须以 `mcp__sorftime_server` live tool schema 为准
 
 ### 快速工具参考
 
@@ -341,7 +344,7 @@ US, GB, DE, FR, IN, CA, JP, ES, IT, MX, AE, AU, BR, SA
 ## 参考资料
 
 ### Sorftime MCP 完整 API 文档
-详细的接口文档已保存在 `references/sorftime-mcp-api.md`，包含：
+旧接口文档已删除；请使用 `.agents/references/sorftime-server-tool-schema.md`，其中包含：
 
 #### 产品相关接口 (9个)
 | 接口 | 用途 | 调用消耗 |
